@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { marked, type Tokens } from 'marked'
-import { escapeHtml, highlightCodeLines } from '../chat/highlightCode'
+import { escapeHtml, highlightCodeLines, isHighlightable } from '../chat/highlightCode'
 
 type Props = {
   content: string
@@ -11,16 +11,27 @@ const renderer = new marked.Renderer()
 renderer.code = function ({ text, lang }: Tokens.Code) {
   const languageLabel = escapeHtml(lang || 'code')
   const lines = text.split('\n')
+  const hasLanguage = isHighlightable(lang)
   const highlightedLines = highlightCodeLines(text, lang)
 
-  const body = highlightedLines
-    .map((line, index) => `
-      <div class="grid grid-cols-[3rem,minmax(0,1fr)] gap-0 hover:bg-[#f6f8fa]/50">
-        <span class="select-none border-r border-[#eaeef2] bg-[#fafbfc] px-2 py-px text-right text-[11px] text-[#8b949e]">${index + 1}</span>
-        <span class="overflow-hidden bg-white px-3 py-px whitespace-pre-wrap break-words text-[#24292f]">${line || '&nbsp;'}</span>
-      </div>
-    `)
-    .join('')
+  // Show line numbers only when language is known (actual code).
+  // Plain text, file trees, command output etc. look better without them.
+  const body = hasLanguage
+    ? highlightedLines
+        .map((line, index) => `
+          <div class="grid grid-cols-[3rem,minmax(0,1fr)] gap-0 hover:bg-[#f6f8fa]/50">
+            <span class="select-none border-r border-[#eaeef2] bg-[#fafbfc] px-2 py-px text-right text-[11px] text-[#8b949e]">${index + 1}</span>
+            <span class="overflow-hidden bg-white px-3 py-px whitespace-pre-wrap break-words text-[#24292f]">${line || '&nbsp;'}</span>
+          </div>
+        `)
+        .join('')
+    : highlightedLines
+        .map((line) => `
+          <div class="hover:bg-[#f6f8fa]/50">
+            <span class="block bg-white px-3 py-px whitespace-pre-wrap break-words text-[#24292f]">${line || '&nbsp;'}</span>
+          </div>
+        `)
+        .join('')
 
   return `
     <div class="my-4 overflow-hidden rounded-lg border border-[#d0d7de] bg-[#f6f8fa] text-[#24292f]">

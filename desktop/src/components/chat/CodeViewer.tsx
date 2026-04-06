@@ -16,18 +16,23 @@ export function CodeViewer({ code, language, maxLines = 20, showLineNumbers = tr
   const isTruncated = !expanded && lines.length > maxLines
   const visibleCode = isTruncated ? lines.slice(0, maxLines).join('\n') : code
 
+  // Only highlight when language is explicitly known.
+  // Do NOT use highlightAuto — it misdetects plain text as code.
+  const hasLanguage = !!language && !!hljs.getLanguage(language)
+  const effectiveShowLineNumbers = showLineNumbers && hasLanguage
+
   const highlightedLines = useMemo(() => {
     return visibleCode.split('\n').map((line) => {
       try {
-        if (language && hljs.getLanguage(language)) {
-          return hljs.highlight(line || ' ', { language, ignoreIllegals: true }).value
+        if (hasLanguage) {
+          return hljs.highlight(line || ' ', { language: language!, ignoreIllegals: true }).value
         }
-        return hljs.highlightAuto(line || ' ').value
+        return escapeHtml(line || ' ')
       } catch {
         return escapeHtml(line)
       }
     })
-  }, [language, visibleCode])
+  }, [hasLanguage, language, visibleCode])
 
   const startLine = 1
 
@@ -55,22 +60,30 @@ export function CodeViewer({ code, language, maxLines = 20, showLineNumbers = tr
       <div className="max-h-[420px] overflow-auto">
         <div className="min-w-full font-[var(--font-mono)] text-[12px] leading-[1.3]">
           {visibleLines.map((line, index) => (
-            <div
-              key={`${startLine + index}-${line}`}
-              className="grid grid-cols-[3rem,minmax(0,1fr)] gap-0 hover:bg-[#f6f8fa]/50"
-            >
-              {showLineNumbers ? (
+            effectiveShowLineNumbers ? (
+              <div
+                key={`${startLine + index}-${line}`}
+                className="grid grid-cols-[3rem,minmax(0,1fr)] gap-0 hover:bg-[#f6f8fa]/50"
+              >
                 <span className="select-none border-r border-[#eaeef2] bg-[#fafbfc] px-2 py-px text-right text-[11px] text-[#8b949e]">
                   {startLine + index}
                 </span>
-              ) : (
-                <span className="w-0" />
-              )}
-              <span
-                className="overflow-hidden bg-white px-3 py-px whitespace-pre-wrap break-words text-[#24292f]"
-                dangerouslySetInnerHTML={{ __html: highlightedLines[index] ?? escapeHtml(line) }}
-              />
-            </div>
+                <span
+                  className="overflow-hidden bg-white px-3 py-px whitespace-pre-wrap break-words text-[#24292f]"
+                  dangerouslySetInnerHTML={{ __html: highlightedLines[index] ?? escapeHtml(line) }}
+                />
+              </div>
+            ) : (
+              <div
+                key={`${startLine + index}-${line}`}
+                className="hover:bg-[#f6f8fa]/50"
+              >
+                <span
+                  className="block bg-white px-3 py-px whitespace-pre-wrap break-words text-[#24292f]"
+                  dangerouslySetInnerHTML={{ __html: highlightedLines[index] ?? escapeHtml(line) }}
+                />
+              </div>
+            )
           ))}
         </div>
       </div>
