@@ -108,6 +108,6 @@ describe('chat blocks', () => {
     expect(container.textContent).toContain('Allow')
     // react-diff-viewer-continued uses styled-components tables that don't
     // fully render in jsdom, so we verify the DiffViewer wrapper is mounted
-    expect(container.querySelector('[class*="rounded-lg"]')).toBeTruthy()
+    expect(container.querySelector('[class*="rounded-[var(--radius-lg)]"]')).toBeTruthy()
   })
 })
