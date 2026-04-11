@@ -19,9 +19,13 @@ import type { ImPlatform } from './attachment-types.js'
 export interface AttachmentStoreConfig {
   root: string
   retentionMs: number
+  /** Grace window before a `.part` orphan (left behind by a crashed writer)
+   *  is eligible for GC. Default 10 minutes. */
+  orphanGraceMs: number
 }
 
 const DEFAULT_RETENTION_MS = 24 * 60 * 60 * 1000
+const DEFAULT_ORPHAN_GRACE_MS = 10 * 60 * 1000
 
 function defaultRoot(): string {
   return path.join(os.homedir(), '.claude', 'im-downloads')
@@ -38,10 +42,12 @@ function sanitizeFilename(name: string): string {
 export class AttachmentStore {
   private readonly root: string
   private readonly retentionMs: number
+  private readonly orphanGraceMs: number
 
   constructor(config?: Partial<AttachmentStoreConfig>) {
     this.root = config?.root ?? defaultRoot()
     this.retentionMs = config?.retentionMs ?? DEFAULT_RETENTION_MS
+    this.orphanGraceMs = config?.orphanGraceMs ?? DEFAULT_ORPHAN_GRACE_MS
   }
 
   /** Compute the target path. Creates parent dirs on demand.
@@ -55,7 +61,11 @@ export class AttachmentStore {
     const candidate = path.join(dir, safeName)
     if (!fsSync.existsSync(candidate)) return candidate
     const { name: base, ext } = path.parse(safeName)
-    return path.join(dir, `${base}-${Date.now()}${ext}`)
+    // Collisions are rare in practice, but multiple downloads landing in the
+    // same millisecond must still produce unique paths — append a random
+    // suffix so the bare timestamp alone never clashes.
+    const rand = Math.random().toString(36).slice(2, 8)
+    return path.join(dir, `${base}-${Date.now()}-${rand}${ext}`)
   }
 
   /** Write atomically: stream to {target}.part, then rename. */
@@ -88,7 +98,9 @@ export class AttachmentStore {
           try {
             const stat = await fs.stat(full)
             const age = now - stat.mtimeMs
-            if (age > this.retentionMs) {
+            const isOrphanPart = entry.name.endsWith('.part')
+            const threshold = isOrphanPart ? this.orphanGraceMs : this.retentionMs
+            if (age > threshold) {
               bytes += stat.size
               await fs.unlink(full)
               removed++
